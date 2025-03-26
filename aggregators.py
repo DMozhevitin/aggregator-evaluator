@@ -233,7 +233,8 @@ async def get_dedust_route(SENDER_ADDRESS, input_token, output_token, input_amou
       "out_minter": output_token,
       "amount": input_amount,
       "swap_mode": "exact_in",
-      "protocols": ["dedust", "stonfi_v1", "stonfi_v2"],
+      "protocols": [], # with empty list it will be filled with default protocols (all)
+      "only_verified_pools": True,
       "slippage_bps": 100,
       "max_splits": 4,
       "max_length": 3

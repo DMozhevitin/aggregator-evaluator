@@ -3,7 +3,7 @@ We have the following database schema:
     conn = sqlite3.connect('aggregator.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS swaps
-                 (utime INTEGER, aggregator TEXT, swap_type TEXT, expected_output REAL, loss_ratio REAL, short_descriptions_out TEXT, short_descriptions_in TEXT)''')
+                 (utime INTEGER, aggregator TEXT, swap_type TEXT, real_output REAL, loss_ratio REAL, short_descriptions_out TEXT, short_descriptions_in TEXT)''')
 """
 
 """
@@ -20,7 +20,7 @@ Name of the aggregator should be shown on the legend.
 It also should be shown higher that means y axis is reversed with 1 at the top and 6 at the bottom.
 
 When we place cursor upon graph point, we should see the following information:
-- expected_output
+- real_output
 - loss_ratio
 - short_descriptions_out
 """
@@ -250,7 +250,7 @@ def get_graph(swap_type):
             
             aggreagators[name]["x"].append(timepoint*1000)
             aggreagators[name]["y"].append(x[7])
-            aggreagators[name]["text"].append(f"expected_output: {x[3]}</br>loss_ratio: {x[4]}</br>{convert_route(json.loads(x[5]))}")
+            aggreagators[name]["text"].append(f"real_output: {x[3]}</br>loss_ratio: {x[4]}</br>{convert_route(json.loads(x[5]))}")
     
     for name in aggreagators:
         data.append(aggreagators[name])

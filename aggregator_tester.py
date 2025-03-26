@@ -18,7 +18,7 @@ import time
 SENDER_ADDRESS = "UQAPPgN25OQh3EOqqt0v_CRmScxa-_ulVwm5NESN1DO4gZzD" # Kiba.ton, a lot of TON and USDT
 
 from aggregators import get_coffe_swap_route, get_dedust_route, get_prices
-from toncenter import get_wallet_seqno, emulate, get_token_symbol, get_token_decimals
+from toncenter import get_wallet_seqno, emulate, get_token_symbol, get_token_decimals, get_mc_seq_no
 from messages import build_external_message
 from pytoniq_core.boc.address import Address
 from functools import partial
@@ -91,12 +91,12 @@ async def assess_emulation(emulation, sender_address, input_token, input_amount,
     """
     # a few notes, if asset OR source_jetton_wallet OR destination_jetton_wallet are null, it means that it is TON (just proxied as jetton)
     # if asset is not null, it is jetton
-    
+
     #lets calc what we send (that means sum of amounts in dex_incoming_transfer where source is sender_address) and jetton_transfer
     # and what we received (that means sum of amounts in dex_outgoing_transfer where destination is sender_address) and jetton_transfer
     def is_pton(dex_transfer):
         return (dex_transfer["source_jetton_wallet"] == None) or (dex_transfer["destination_jetton_wallet"] == None)
-    
+
     short_descriptions_out = []
     short_descriptions_in  = []
     sent_amounts = {}
@@ -172,8 +172,8 @@ async def assess_emulation(emulation, sender_address, input_token, input_amount,
     #print("Ton diff:", ton_amount_diff,
     #      "Sent:", json.dumps(sent_amounts, indent=4),
     #      "Received:", json.dumps(received_amounts, indent=4))
-    
-    # lets also count total number of transactions 
+
+    # lets also count total number of transactions
     count = 0
     max_depth = 0
     def add_children(tx, depth):
@@ -201,7 +201,7 @@ async def assess_emulation(emulation, sender_address, input_token, input_amount,
     # Now we want to calculate "price": ratio of what we received to what we sent
     # we only want to take into account target received jetton, sent jetton and TON
     # we don't want to take into account any intermediate jettons
-    
+
     #rewrite sent_amounts of ton to ton_amount_diff it is more correct since take into account gas fees
     sent_amounts["ton"] = -ton_amount_diff
     # get prices of all assets from sent_amounts and received_amounts
@@ -217,27 +217,28 @@ async def assess_emulation(emulation, sender_address, input_token, input_amount,
     # only take into account target asset
     raw_output_token = Address(output_token).to_str(is_user_friendly=False).upper()
     received_usd = received_amounts.get(raw_output_token, 0) * prices[raw_output_token]
-    
+
     # lets calculate the loss ratio
     if sent_usd == 0:
         return 0
     print(short_descriptions_out)
-    return received_usd / sent_usd, short_descriptions_out, short_descriptions_in
+    real_out_amount = received_amounts.get(raw_output_token, 0)
+    return received_usd / sent_usd, short_descriptions_out, short_descriptions_in, real_out_amount
 
 
-    
+
 
 
 
 
 
 # lets put it all together
-async def emulate_and_assess(seqno, get_route, input_token, output_token, input_amount):
+async def emulate_and_assess(mc_seq_no, seqno, get_route, input_token, output_token, input_amount):
     route = await get_route(SENDER_ADDRESS, input_token, output_token, input_amount)
     swap_external = build_external_message(SENDER_ADDRESS, seqno, route[1])
-    swap_emulation = await emulate(swap_external)
-    emulation_assesment, out_desc, in_descr = await assess_emulation(swap_emulation, SENDER_ADDRESS, input_token, input_amount, output_token)
-    return route[0], emulation_assesment, out_desc, in_descr
+    swap_emulation = await emulate(mc_seq_no, swap_external)
+    emulation_assesment, out_desc, in_descr, real_out_amount = await assess_emulation(swap_emulation, SENDER_ADDRESS, input_token, input_amount, output_token)
+    return route[0], emulation_assesment, out_desc, in_descr, real_out_amount
 
 async def emulate_and_assess_all(input_token, output_token, input_amount):
     seqno = await get_wallet_seqno(SENDER_ADDRESS)
@@ -245,16 +246,21 @@ async def emulate_and_assess_all(input_token, output_token, input_amount):
     in_decimals = await get_token_decimals(input_token)
     out_decimals = await get_token_decimals(output_token)
 
-    tasks.append(emulate_and_assess(seqno, get_coffe_swap_route, input_token, output_token, input_amount))
+    mc_seq_no = await get_mc_seq_no()
+    tasks.append(emulate_and_assess(mc_seq_no, seqno, get_coffe_swap_route, input_token, output_token, input_amount))
     # Fix 'output_token_decimals' argument
     dedust_route_getter = partial(get_dedust_route, output_token_decimals=out_decimals)
-    tasks.append(emulate_and_assess(seqno, dedust_route_getter, input_token, output_token, input_amount * 10**in_decimals))
+    tasks.append(emulate_and_assess(mc_seq_no, seqno, dedust_route_getter, input_token, output_token, input_amount * 10**in_decimals))
     results = await asyncio.gather(*tasks)
+
+    real_output_swap_coffee = results[0][4]
+    real_output_dedust = results[1][4]
     print("Expected Coffee.swap:", results[0][0], "DeDust:", results[1][0])
-    print("Real     Coffee.swap:", results[0][1], "DeDust:", results[1][1])
+    print("Real     Coffee.swap:", real_output_swap_coffee, "DeDust:", real_output_dedust)
+    print("Loss R   Coffee.swap:", results[0][1], "DeDust:", results[1][1])
     utime = int(time.time())
-    insert_data(utime, "Coffee.swap", f"{input_amount} {input_token}->{output_token}", results[0][0], results[0][1], results[0][2], results[0][3])
-    insert_data(utime, "DeDust", f"{input_amount} {input_token}->{output_token}", results[1][0], results[1][1], results[1][2], results[1][3])
+    insert_data(utime, "Coffee.swap", f"{input_amount} {input_token}->{output_token}", real_output_swap_coffee, results[0][1], results[0][2], results[0][3])
+    insert_data(utime, "DeDust", f"{input_amount} {input_token}->{output_token}", real_output_dedust, results[1][1], results[1][2], results[1][3])
 
     # Toncenter API key that is used doesn't support that much requests per seconds, so we wait a bit here
     await asyncio.sleep(1)
@@ -273,13 +279,13 @@ async def assess():
     results = await asyncio.gather(*tasks)
     # lets print in format: aggregator: output amount, ...
     print("Coffee.swap:", results[0][0], "Rainbow.ag:", results[1][0], "Xdelta.fi:", results[2][0])
-    
+
 # lets do assessment in infinite cycle with 3 sec delay
 
 import asyncio
 
 # Now we want to get SQLITE database where store data
-# utime, aggregator, swap_type(what to what and amount), expected_output, loss_ratio, short_descriptions_out
+# utime, aggregator, swap_type(what to what and amount), real_output, loss_ratio, short_descriptions_out
 # then we want to  retrieve data for prev 24 hours (so index for utime) and given swap_type
 
 def create_database_if_not_exists():
@@ -287,18 +293,18 @@ def create_database_if_not_exists():
     conn = sqlite3.connect('aggregator.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS swaps
-                 (utime INTEGER, aggregator TEXT, swap_type TEXT, expected_output REAL, loss_ratio REAL, short_descriptions_out TEXT, short_descriptions_in TEXT)''')
+                 (utime INTEGER, aggregator TEXT, swap_type TEXT, real_output REAL, loss_ratio REAL, short_descriptions_out TEXT, short_descriptions_in TEXT)''')
     # create indexes
     c.execute('''CREATE INDEX IF NOT EXISTS idx_utime ON swaps (utime)''')
     c.execute('''CREATE INDEX IF NOT EXISTS idx_swap_type ON swaps (swap_type)''')
     conn.commit()
     conn.close()
 
-def insert_data(utime, aggregator, swap_type, expected_output, loss_ratio, short_descriptions_out, short_descriptions_in):
+def insert_data(utime, aggregator, swap_type, real_output, loss_ratio, short_descriptions_out, short_descriptions_in):
     import sqlite3
     conn = sqlite3.connect('aggregator.db')
     c = conn.cursor()
-    c.execute("INSERT INTO swaps VALUES (?, ?, ?, ?, ?, ?, ?)", (utime, aggregator, swap_type, expected_output, loss_ratio, json.dumps(short_descriptions_out), json.dumps(short_descriptions_in)))
+    c.execute("INSERT INTO swaps VALUES (?, ?, ?, ?, ?, ?, ?)", (utime, aggregator, swap_type, real_output, loss_ratio, json.dumps(short_descriptions_out), json.dumps(short_descriptions_in)))
     # also let's automatically remove more than week old data
     c.execute("DELETE FROM swaps WHERE utime < ?", (utime - 7 * 24 * 3600,))
     conn.commit()

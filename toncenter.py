@@ -9,6 +9,15 @@ import os
 from pytoniq_core.boc.address import Address
 toncenter_api_key = os.getenv("TONCENTER_API_KEY")
 
+async def get_mc_seq_no():
+   # add api key to headers
+    headers = { "accept": "application/json", "X-API-Key": toncenter_api_key }
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"https://toncenter.com/api/v2/getMasterchainInfo", headers = headers) as response:
+            resp = await response.json()
+            return resp["result"]["last"]["seqno"]
+
+
 async def get_wallet_seqno(address):
     # add api key to headers
     headers = { "accept": "application/json", "X-API-Key": toncenter_api_key }
@@ -28,10 +37,11 @@ async def get_wallet_seqno(address):
 and returns emulation result
 """
 
-async def emulate(boc):
+async def emulate(mc_seq_no, boc):
     async with aiohttp.ClientSession() as session:
         emulation_request = {
             "boc": boc.decode("utf-8"),
+            "mc_block_seqno": mc_seq_no,
             "ignore_chksig": True,
             "include_code_data": False,
             "with_actions": True
@@ -79,7 +89,10 @@ async def get_token_symbol(address):
             try:
               symbol = metadata[address]["token_info"][0]["symbol"]
             except:
-                symbol = "UNKWN"
+                if address is None:
+                    symbol = "TON"
+                else:
+                  symbol = "UNKWN"
             token_symbol_cache[address] = symbol
             return symbol
 
