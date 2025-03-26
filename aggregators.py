@@ -258,18 +258,9 @@ async def get_dedust_route(SENDER_ADDRESS, input_token, output_token, input_amou
 
 
 # it is better to use 3rd-party service to get prices, but for now I found xdelta endpoint and will use it
-async def get_prices(jettons):
-    converted_jettons = []
-    for jetton in jettons:
-        if jetton == "ton":
-            jetton = "TON"
-        else:
-            jetton = Address(jetton).to_str(is_user_friendly=True)
-        converted_jettons.append(jetton)
+async def get_prices():
     async with aiohttp.ClientSession() as session:
-        prices_request = {
-            "addresses": converted_jettons
-        }
+        prices_request = {}
         async with session.post("https://backend.xdelta.fi/api/v1/prices", json=prices_request) as response:
             prices = await response.json()
     # convert back

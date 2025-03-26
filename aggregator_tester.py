@@ -24,7 +24,7 @@ from pytoniq_core.boc.address import Address
 from functools import partial
 
 
-async def assess_emulation(emulation, sender_address, input_token, input_amount, output_token):
+async def assess_emulation(emulation, sender_address, input_token, input_amount, output_token, prices):
     """
     emulation return the following json:
     {
@@ -204,8 +204,6 @@ async def assess_emulation(emulation, sender_address, input_token, input_amount,
 
     #rewrite sent_amounts of ton to ton_amount_diff it is more correct since take into account gas fees
     sent_amounts["ton"] = -ton_amount_diff
-    # get prices of all assets from sent_amounts and received_amounts
-    prices = await get_prices(set(list(sent_amounts.keys()) + list(received_amounts.keys())+ [output_token]))
     # lets calculate USD value of what we sent and received
     sent_usd = 0
     received_usd = 0
@@ -233,11 +231,11 @@ async def assess_emulation(emulation, sender_address, input_token, input_amount,
 
 
 # lets put it all together
-async def emulate_and_assess(mc_seq_no, seqno, get_route, input_token, output_token, input_amount):
+async def emulate_and_assess(mc_seq_no, seqno, get_route, input_token, output_token, input_amount, prices):
     route = await get_route(SENDER_ADDRESS, input_token, output_token, input_amount)
     swap_external = build_external_message(SENDER_ADDRESS, seqno, route[1])
     swap_emulation = await emulate(mc_seq_no, swap_external)
-    emulation_assesment, out_desc, in_descr, real_out_amount = await assess_emulation(swap_emulation, SENDER_ADDRESS, input_token, input_amount, output_token)
+    emulation_assesment, out_desc, in_descr, real_out_amount = await assess_emulation(swap_emulation, SENDER_ADDRESS, input_token, input_amount, output_token, prices)
     return route[0], emulation_assesment, out_desc, in_descr, real_out_amount
 
 async def emulate_and_assess_all(input_token, output_token, input_amount):
@@ -246,11 +244,12 @@ async def emulate_and_assess_all(input_token, output_token, input_amount):
     in_decimals = await get_token_decimals(input_token)
     out_decimals = await get_token_decimals(output_token)
 
+    prices = await get_prices()
     mc_seq_no = await get_mc_seq_no()
-    tasks.append(emulate_and_assess(mc_seq_no, seqno, get_coffe_swap_route, input_token, output_token, input_amount))
+    tasks.append(emulate_and_assess(mc_seq_no, seqno, get_coffe_swap_route, input_token, output_token, input_amount, prices))
     # Fix 'output_token_decimals' argument
     dedust_route_getter = partial(get_dedust_route, output_token_decimals=out_decimals)
-    tasks.append(emulate_and_assess(mc_seq_no, seqno, dedust_route_getter, input_token, output_token, input_amount * 10**in_decimals))
+    tasks.append(emulate_and_assess(mc_seq_no, seqno, dedust_route_getter, input_token, output_token, input_amount * 10**in_decimals, prices))
     results = await asyncio.gather(*tasks)
 
     real_output_swap_coffee = results[0][4]
