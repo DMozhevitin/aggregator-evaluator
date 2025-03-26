@@ -1,5 +1,7 @@
 # Aggregator evaluator
 
+Patched version of https://github.com/EmelyanenkoK/aggregator_evaludator
+
 ## Usage
 
 **Run the process that populates DB**
