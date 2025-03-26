@@ -227,7 +227,10 @@ def get_graph(swap_type):
     for timepoint in timepoints:
         timepoints[timepoint] = sorted(timepoints[timepoint], key=lambda x: -x[4])
         for i, x in enumerate(timepoints[timepoint]):
-            x.append(i+1)
+            if i != 0 and x[4] == timepoints[timepoint][i-1][4]:
+                x.append(i)
+            else:
+                x.append(i+1)
     
     data = []
 
