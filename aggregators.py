@@ -215,7 +215,7 @@ async def get_xdelta_fi_route(SENDER_ADDRESS, input_token, output_token, input_a
             compose_request = {
                 "multiroute": route["data"]["multiroute"],
                 "user_address": SENDER_ADDRESS,
-                "slippage": 100,
+                "slippage": 0.01,
                 "timeout": 300
             }
         async with session.post("https://backend.xdelta.fi/api/v1/compose", json=compose_request) as response:
