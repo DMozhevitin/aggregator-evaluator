@@ -41,23 +41,23 @@ async def assess_emulation(emulation, sender_address, input_token, input_amount,
         print("Error: no transactions in emulation", emulation)
     for tx_hash in emulation["transactions"]:
         transaction = emulation["transactions"][tx_hash]
-        account_state_hash_before = transaction["account_state_hash_before"]
-        account_state_hash_after = transaction["account_state_hash_after"]
         account_address = transaction["account"]
         if not account_address in accounts:
             accounts[account_address] = {}
-        prev_state = emulation["account_states"][account_state_hash_before]
-        after_state = emulation["account_states"][account_state_hash_after]
-        if not int(prev_state["last_trans_lt"]) in accounts[account_address]:
-            accounts[account_address][int(prev_state["last_trans_lt"])] = prev_state
-        if not int(after_state["last_trans_lt"]) in accounts[account_address]:
-            accounts[account_address][int(after_state["last_trans_lt"])] = after_state
+        prev_state = transaction["account_state_before"]
+        after_state = transaction["account_state_after"]
+        lt = int(transaction["lt"])
+        if not lt in accounts[account_address]:
+            accounts[account_address][lt] = prev_state
+        if not lt in accounts[account_address]:
+            accounts[account_address][lt] = after_state
     # we want to know initial and final balance on sender_address
     # problem that sender_address is in friendly format and emulation is in raw format
     raw_sender_address = Address(sender_address).to_str(is_user_friendly=False).upper()
     sender_account = accounts[raw_sender_address]
-    initial_balance = sender_account[min(sender_account.keys())]["balance"]
-    final_balance = sender_account[max(sender_account.keys())]["balance"]
+
+    initial_balance = int(sender_account[min(sender_account.keys())]["balance"])
+    final_balance = int(sender_account[max(sender_account.keys())]["balance"])
     ton_amount_diff = final_balance - initial_balance
     # now we want to get how much jetton we sent and received
     # emulation returns actions, here we are interested in jetton_swap and jetton_transfer(for not yet parsable swaps)
