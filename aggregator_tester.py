@@ -273,23 +273,6 @@ async def emulate_and_assess_all(input_token, output_token, input_amount):
     # Toncenter API key that is used doesn't support that much requests per seconds, so we wait a bit here
     await asyncio.sleep(1)
 
-# for now lets compare self evaluation of aggregators
-async def assess():
-    input_token = "EQCJbp0kBpPwPoBG-U5C-cWfP_jnksvotGfArPF50Q9Qiv9h"
-    output_token = "ton"
-    input_amount = 60
-    # lets do requests in parallel
-    tasks = []
-    decimals = await get_token_decimals(input_token)
-    tasks.append(get_coffe_swap_route(input_token, output_token, input_amount))
-    tasks.append(get_rainbow_ag_route(input_token, output_token, input_amount * 10**decimals))
-    tasks.append(get_xdelta_fi_route(input_token, output_token, input_amount))
-    results = await asyncio.gather(*tasks)
-    # lets print in format: aggregator: output amount, ...
-    print("Coffee.swap:", results[0][0], "Rainbow.ag:", results[1][0], "Xdelta.fi:", results[2][0])
-
-# lets do assessment in infinite cycle with 3 sec delay
-
 import asyncio
 
 # Now we want to get SQLITE database where store data

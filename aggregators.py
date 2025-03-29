@@ -3,14 +3,6 @@ from pytoniq_core.boc.address import Address
 import json
 
 """
-Currently there are 3 known aggregators on TON:
-swap.coffee
-rainbow.ag
-xdelta.fi, 
-let's dive to their API and check how they work.
-"""
-
-"""
 Coffee.swap
 To get route we run /v1/route endpoint. It returns us json which contains expected amount and paths.
 Then to emulate, we pass path to v2/route/transactions endpoint and get the messages.
@@ -105,122 +97,7 @@ async def get_coffe_swap_route(SENDER_ADDRESS, input_token, output_token, input_
         async with session.post("https://backend.swap.coffee/v2/route/transactions", json=transactions_request) as response:
             transactions = await response.json()
             return route["output_amount"], transactions["transactions"]
-        
-"""
-Rainbow.ag
-Rainbow immediately gives messages for emulation, so we don't need to make 2 requests.
 
-curl 'https://api.rainbow.ag/api/best-route?inputAssetAmount=1000000000&inputAssetAddress=ton&outputAssetAddress=EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs&senderAddress=UQBGFBa0OAHi9jT1kq8PNy1OXW4CfMJkPAl4wQsP2gNJWkpJ&maxDepth=3&maxSplits=4&maxSlippage=100' \
-  -H 'Origin: https://rainbow.ag' \
-  -H 'Referer: https://rainbow.ag/'
-
-Response will contain:
-{
-    "displayData": { 
-        "outputAssetAmount": 3.435933,
-        ...
-        },
-    "swapMessages": [
-        {
-            "address": "0:1150b518b2626ad51899f98887f8824b70065456455f7fe2813f012699a4061f",
-            "amount": "1255000000",
-            "payload": "..."
-        },
-	...
-    ],
-}
-"""
-
-async def get_rainbow_ag_route(SENDER_ADDRESS, input_token, output_token, input_amount):
-    async with aiohttp.ClientSession() as session:
-        # it is important to include headers, otherwise it will return 403
-        headers = {
-            "Origin": "https://rainbow.ag",
-            "Referer": "https://rainbow.ag/",
-            "Accept": "application/json"
-        }
-        uri = f"https://api.rainbow.ag/api/best-route?inputAssetAmount={input_amount}&inputAssetAddress={input_token}&outputAssetAddress={output_token}&senderAddress={SENDER_ADDRESS}&maxDepth=2&maxSplits=4&maxSlippage=100"
-        async with session.get(uri, headers=headers) as response:
-            if response.status != 200:
-                print(f"Error: Received status code {response.status}")
-                print(await response.text())
-                return None, None
-            route = await response.json()
-            return route["displayData"]["outputAssetAmount"], route["swapMessages"]
-        
-
-"""
-Xdelta.fi
-Xdelta uses approach of coffee.swap with 2 calls:
-
-curl 'https://backend.xdelta.fi/api/v1/route' \
-  -H 'content-type: application/json' \
-  --data-raw '{
-  "input_token": "TON",
-  "output_token": "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs",
-  "input_amount": "1",
-  "max_length": "2",
-  "max_splits": "4",
-  "intermediate_tokens": "optimal"
-}'
-
-Response will contain:
-{
-  "ok": true,
-  "data": {
-    "output_amount": 3.4717588560243358,
-    "multiroute": {
-      ...
-    }
-  }
-}
-
-To get message we need to call /api/v1/compose with the data from previous call:
-curl 'https://backend.xdelta.fi/api/v1/compose' \
-  -H 'content-type: application/json' \
-  --data-raw '{"multiroute":<...>,"user_address":"UQBGFBa0OAHi9jT1kq8PNy1OXW4CfMJkPAl4wQsP2gNJWkpJ","slippage":100,"timeout":300}'
-
-It will return
-{
-    "ok": true,
-    "data": {
-        "messages": [
-            {
-                "address": "...",
-                "amount": 1710000001,
-                "payload": "...",
-                "send_mode": 3
-            }
-        ]
-    }
-}
-"""
-
-async def get_xdelta_fi_route(SENDER_ADDRESS, input_token, output_token, input_amount):
-    if input_token == "ton":
-        input_token = "TON" # xdelta uses TON instead of ton
-    if output_token == "ton":
-        output_token = "TON"
-    route_request = {
-        "input_token": input_token,
-        "output_token": output_token,
-        "input_amount": input_amount,
-        "max_length": "2",
-        "max_splits": "4",
-        "intermediate_tokens": "optimal"
-    }
-    async with aiohttp.ClientSession() as session:
-        async with session.post("https://backend.xdelta.fi/api/v1/route", json=route_request) as response:
-            route = await response.json()
-            compose_request = {
-                "multiroute": route["data"]["multiroute"],
-                "user_address": SENDER_ADDRESS,
-                "slippage": 0.01,
-                "timeout": 300
-            }
-        async with session.post("https://backend.xdelta.fi/api/v1/compose", json=compose_request) as response:
-            compose = await response.json()
-            return route["data"]["output_amount"], compose["data"]["messages"]
 
 async def get_dedust_route(SENDER_ADDRESS, input_token, output_token, input_amount, output_token_decimals):
     if input_token == "ton":
