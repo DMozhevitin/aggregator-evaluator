@@ -99,7 +99,7 @@ async def get_coffe_swap_route(SENDER_ADDRESS, input_token, output_token, input_
             # get transactions
             transactions_request = {
                 "sender_address": SENDER_ADDRESS,
-                "slippage": 1,
+                "slippage": 0.01,
                 "paths": route["paths"]
             }
         async with session.post("https://backend.swap.coffee/v2/route/transactions", json=transactions_request) as response:
